@@ -1,5 +1,4 @@
-// server/index.js
-import 'dotenv/config'; // MUST be first
+import 'dotenv/config';
 
 import express from 'express';
 import cors from 'cors';
@@ -17,20 +16,25 @@ import emailSignupRoutes from './routes/emailSignup.js';
 import dashboardRoutes from './routes/dashboard.js';
 import { runScrape } from './services/scraper/index.js';
 
-const app = express();
+const app = express(); // ✅ ONLY ONCE
 const PORT = process.env.PORT || 5000;
 
-// 🔍 DEBUG (remove later)
-console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-
-// Middleware
+/* =======================
+   CORS (VERY IMPORTANT)
+======================= */
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: [
+      'http://localhost:5173',
+      'https://louderevents.vercel.app', // ✅ your Vercel frontend
+    ],
     credentials: true,
   })
 );
 
+/* =======================
+   Middlewares
+======================= */
 app.use(express.json());
 app.use(cookieParser());
 
@@ -40,26 +44,38 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production', // true on Render
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
 );
 
+/* =======================
+   Passport
+======================= */
 app.use(passport.initialize());
 app.use(passport.session());
-
-// ✅ Passport config AFTER env + middleware
 configurePassport();
 
-// Routes
+/* =======================
+   Routes
+======================= */
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/email-signup', emailSignupRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+/* =======================
+   Health Check
+======================= */
+app.get('/api/health', (_, res) => {
+  res.json({ ok: true, status: 'Backend is running 🚀' });
+});
 
+/* =======================
+   Manual Scrape API
+======================= */
 app.post('/api/scrape', async (_, res) => {
   try {
     await runScrape();
@@ -69,15 +85,17 @@ app.post('/api/scrape', async (_, res) => {
   }
 });
 
-// Start server
+/* =======================
+   DB + Server Start
+======================= */
 connectDB()
   .then(() => {
     startScraperCron();
-    app.listen(PORT, () =>
-      console.log(`Server running on http://localhost:${PORT}`)
-    );
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
   })
   .catch((err) => {
-    console.error('DB connection failed:', err);
+    console.error('❌ DB connection failed:', err);
     process.exit(1);
   });
